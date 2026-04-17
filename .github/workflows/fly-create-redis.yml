@@ -91,3 +91,8 @@ jobs:
         with:
           secret-name: FLY_ADMIN_PASSWORD
           secret-value: ${{ steps.gen_admin.outputs.admin_password }}
+
+      - name: Reveal admin credentials in workflow logs (will be visible in Actions)
+        run: |
+          echo "ADMIN_EMAIL=${{ steps.gen_admin.outputs.admin_email }}"
+          echo "ADMIN_PASSWORD=${{ steps.gen_admin.outputs.admin_password }}"

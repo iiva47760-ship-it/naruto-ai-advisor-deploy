@@ -1,4 +1,4 @@
-name: Create Upstash Redis on Fly and store REDIS_URL
+name: Create Upstash Redis on Fly and store REDIS_URL + admin creds
 
 on:
   push:
@@ -57,9 +57,37 @@ jobs:
           echo "Setting REDIS_URL secret on Fly app (naruto-ai-backend)"
           flyctl secrets set REDIS_URL="${{ steps.create_redis.outputs.redis_url }}" --app naruto-ai-backend || true
 
+      - name: Generate admin credentials
+        id: gen_admin
+        run: |
+          set -euo pipefail
+          ADMIN_EMAIL=admin@naruto.ai
+          ADMIN_PASSWORD=$(openssl rand -base64 12)
+          echo "admin_email=$ADMIN_EMAIL" >> $GITHUB_OUTPUT
+          echo "admin_password=$ADMIN_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Attach admin secrets to Fly app
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -e
+          echo "Setting ADMIN_EMAIL and ADMIN_PASSWORD on Fly app (naruto-ai-backend)"
+          flyctl secrets set ADMIN_EMAIL="${{ steps.gen_admin.outputs.admin_email }}" ADMIN_PASSWORD="${{ steps.gen_admin.outputs.admin_password }}" --app naruto-ai-backend || true
+
       - name: Save REDIS_URL as repository secret
         uses: peter-evans/create-or-update-secret@v4
         with:
           secret-name: FLY_REDIS_URL
           secret-value: ${{ steps.create_redis.outputs.redis_url }}
-          # repository defaults to current repository
+
+      - name: Save admin email as repository secret
+        uses: peter-evans/create-or-update-secret@v4
+        with:
+          secret-name: FLY_ADMIN_EMAIL
+          secret-value: ${{ steps.gen_admin.outputs.admin_email }}
+
+      - name: Save admin password as repository secret
+        uses: peter-evans/create-or-update-secret@v4
+        with:
+          secret-name: FLY_ADMIN_PASSWORD
+          secret-value: ${{ steps.gen_admin.outputs.admin_password }}

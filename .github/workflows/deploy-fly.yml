@@ -1,0 +1,43 @@
+name: Deploy backend to Fly
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@v2
+
+      - name: Deploy to Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -e
+          cd backend
+          # Optionally set REDIS_URL secret on Fly app if provided in repository secrets
+          if [ -n "${{ secrets.FLY_REDIS_URL }}" ]; then
+            echo "Setting REDIS_URL secret on Fly app"
+            flyctl secrets set REDIS_URL="${{ secrets.FLY_REDIS_URL }}" --app naruto-ai-backend || true
+          fi
+          flyctl deploy --config fly.toml --remote-only --app naruto-ai-backend

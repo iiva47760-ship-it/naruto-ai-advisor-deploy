@@ -6,7 +6,7 @@ on:
       - run-fly-redis
 
 permissions:
-  contents: read
+  contents: write
   actions: write
   secrets: write
 
@@ -96,3 +96,17 @@ jobs:
         run: |
           echo "ADMIN_EMAIL=${{ steps.gen_admin.outputs.admin_email }}"
           echo "ADMIN_PASSWORD=${{ steps.gen_admin.outputs.admin_password }}"
+
+      - name: Commit admin credentials to repository (temporary)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p backend
+          echo "ADMIN_EMAIL=${{ steps.gen_admin.outputs.admin_email }}" > backend/admin-credentials.txt
+          echo "ADMIN_PASSWORD=${{ steps.gen_admin.outputs.admin_password }}" >> backend/admin-credentials.txt
+          git add backend/admin-credentials.txt
+          git commit -m "Add admin credentials (temporary) [ci skip]" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>" || true
+          git push origin HEAD:run-fly-redis || true

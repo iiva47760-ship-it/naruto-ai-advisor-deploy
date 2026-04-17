@@ -1,0 +1,16 @@
+# Render service configuration for naruto-ai backend
+# Deploy as a Web Service (Node) or use Dockerfile
+
+services:
+  - type: web
+    name: naruto-ai-backend
+    env: node
+    branch: main
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"

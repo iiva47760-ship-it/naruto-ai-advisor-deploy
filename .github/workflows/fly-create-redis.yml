@@ -1,0 +1,65 @@
+name: Create Upstash Redis on Fly and store REDIS_URL
+
+on:
+  push:
+    branches:
+      - run-fly-redis
+
+permissions:
+  contents: read
+  actions: write
+  secrets: write
+
+jobs:
+  create-redis:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@v2
+
+      - name: Create Upstash Redis (non-interactive)
+        id: create_redis
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          REDIS_NAME=naruto-ai-redis-$(date +%s)
+          echo "Creating Upstash Redis: $REDIS_NAME"
+
+          # Try non-interactive create; fall back to best-effort create
+          flyctl redis create --name "$REDIS_NAME" --region "iad" --yes || flyctl redis create --name "$REDIS_NAME" --region "iad" || true
+
+          # Poll until Private URL appears (status output contains 'Private URL')
+          for i in $(seq 1 40); do
+            STATUS=$(flyctl redis status "$REDIS_NAME" 2>&1) || true
+            REDIS_URL=$(echo "$STATUS" | awk -F'= ' '/Private URL/ {print $2}')
+            if [ -n "$REDIS_URL" ]; then
+              echo "Found REDIS_URL: $REDIS_URL"
+              echo "redis_url=$REDIS_URL" >> $GITHUB_OUTPUT
+              echo "redis_name=$REDIS_NAME" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            echo "Waiting for redis to become available... ($i)"
+            sleep 10
+          done
+
+          echo "Timed out waiting for redis to be ready" >&2
+          exit 1
+
+      - name: Attach REDIS_URL to Fly app secrets
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -e
+          echo "Setting REDIS_URL secret on Fly app (naruto-ai-backend)"
+          flyctl secrets set REDIS_URL="${{ steps.create_redis.outputs.redis_url }}" --app naruto-ai-backend || true
+
+      - name: Save REDIS_URL as repository secret
+        uses: peter-evans/create-or-update-secret@v4
+        with:
+          secret-name: FLY_REDIS_URL
+          secret-value: ${{ steps.create_redis.outputs.redis_url }}
+          # repository defaults to current repository
